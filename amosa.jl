@@ -1,6 +1,7 @@
 using Random:length
 using Plots
 using LinearAlgebra
+using Serialization
 
 include("./functions/metamodel.jl")
 include("./functions/initial.jl")
@@ -12,13 +13,11 @@ include("./functions/hypervol.jl")
 
 function amosa()
 
-    nodes = 10
+    file_path = "./models/model-10-2-2.jls"
 
-    hubs = 2
-
-    vehicles = 2
-
-    model = metamodel(nodes, hubs, 0.5, vehicles, 500, 10, 5)
+    model = open(file_path, "r") do io
+        deserialize(io)
+    end
 
     alpha = 0.95
 

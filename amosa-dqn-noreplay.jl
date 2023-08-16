@@ -2,14 +2,15 @@ using Flux
 using Random:length
 using Plots
 using LinearAlgebra
+using Serialization
 
-include("metamodel.jl")
-include("initial.jl")
-include("cost.jl")
-include("types.jl")
-include("perturb.jl")
-include("main_produce.jl")
-include("hypervol.jl")
+include("./functions/metamodel.jl")
+include("./functions/initial.jl")
+include("./functions/cost.jl")
+include("./functions/types.jl")
+include("./functions/perturb.jl")
+include("./functions/main_produce.jl")
+include("./functions/hypervol.jl")
 
 function change_to_state(x)
 
@@ -40,10 +41,18 @@ function amosa_DQN_no_replay()
 
     vehicles = 2
 
-    model = metamodel(nodes, hubs, 0.5, vehicles, 500, 10, 5)
+    file_path = "./models/model-10-2-2.jls"
+
+    model = open(file_path, "r") do io
+        deserialize(io)
+    end
 
     STATE_SIZE = nodes + 1 + (nodes - hubs) + hubs * (vehicles - 1) + hubs - 1
     ACTION_SPACE = 6
+
+    U_Point = [0, 0]
+
+    AU_Point = [1000000000, 1000000000]
 
     solve_model = Chain(
         Dense(STATE_SIZE, 64, relu),
@@ -52,7 +61,7 @@ function amosa_DQN_no_replay()
 
     discount_factor = 0.9
     learning_rate = 0.5
-    epsilon = 0.2
+    epsilon = 0.1
 
     optimizer = ADAM(learning_rate)
     loss_function(y, ŷ) = Flux.mse(y, ŷ)
@@ -121,9 +130,11 @@ function amosa_DQN_no_replay()
             C = unique(C, dims=1)
             npareto = size(C, 1)
 
+            hv = hypervol(C, U_Point, AU_Point, 10000)
+
             next_state = copy(change_to_state(x))
 
-            reward = npareto
+            reward = hv
             q_values_next = solve_model(next_state)
             target = reward + discount_factor * maximum(q_values_next)
             
@@ -139,23 +150,10 @@ function amosa_DQN_no_replay()
         temp = alpha * temp
     end
 
-    C = zeros(Float64, length(archive), 2)
-    for aa in 1:length(archive)
-        C[aa, 1] = archive[aa].Cost[1]
-        C[aa, 2] = archive[aa].Cost[2]
-    end
-
-    C = unique(C, dims=1)
-    npareto = size(C, 1)
-
     scatter(C[:, 1], C[:, 2], markershape=:circle, legend=false)
     xlabel!("F1")
     ylabel!("F2")
     savefig("plot-amosa-dqn-noreplay.png")
-
-    U_Point = [0, 0]
-
-    AU_Point = [1000000000, 1000000000]
 
     dm = sqrt(maximum(C[:, 1]) - minimum(C[:, 1]) + maximum(C[:, 2]) - minimum(C[:, 2]))
     mid_temp = 0.0
@@ -184,7 +182,6 @@ function amosa_DQN_no_replay()
     end
 
     hv = hypervol(C, U_Point, AU_Point, 10000)
-
 
     println("Number of Pareto:", npareto)
     println("DM:", dm)
