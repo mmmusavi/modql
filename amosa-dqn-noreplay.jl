@@ -11,27 +11,7 @@ include("./functions/types.jl")
 include("./functions/perturb.jl")
 include("./functions/main_produce.jl")
 include("./functions/hypervol.jl")
-
-function change_to_state(x)
-
-    n = length(x.sol.route)
-
-    newstate = copy(x.sol.hub)
-
-    newstate = vec(newstate)
-
-    newstate = vcat(newstate,[-2])
-
-    for i=1:n
-        newstate = vcat(newstate,x.sol.route[i])
-        if i!=n
-            newstate = vcat(newstate,[-1])
-        end
-    end
-
-    return newstate
-
-end
+include("./functions/change_to_state.jl")
 
 function amosa_DQN_no_replay()
 

@@ -2,6 +2,7 @@ using Flux
 using Random:length
 using Plots
 using LinearAlgebra
+using Serialization
 
 include("./functions/metamodel.jl")
 include("./functions/initial.jl")
@@ -10,29 +11,9 @@ include("./functions/types.jl")
 include("./functions/perturb.jl")
 include("./functions/main_produce.jl")
 include("./functions/hypervol.jl")
+include("./functions/change_to_state.jl")
 
-function change_to_state(data)
-
-    n = length(data.sol.route)
-
-    newstate = copy(data.sol.hub)
-
-    newstate = vec(newstate)
-
-    newstate = vcat(newstate, [-2])
-
-    for i = 1:n
-        newstate = vcat(newstate, data.sol.route[i])
-        if i != n
-            newstate = vcat(newstate, [-1])
-        end
-    end
-
-    return newstate
-
-end
-
-function amosa_DQN_no_replay()
+function amosa_DQN_replay()
 
     nodes = 10
 
@@ -40,19 +21,31 @@ function amosa_DQN_no_replay()
 
     vehicles = 2
 
-    model = metamodel(nodes, hubs, 0.5, vehicles, 500, 10, 5)
+    file_path = "./models/model-10-2-2.jls"
+
+    model = open(file_path, "r") do io
+        deserialize(io)
+    end
 
     STATE_SIZE = nodes + 1 + (nodes - hubs) + hubs * (vehicles - 1) + hubs - 1
     ACTION_SPACE = 6
 
+    U_Point = [0, 0]
+
+    AU_Point = [1000000000, 1000000000]
+
     solve_model = Chain(
-        Dense(STATE_SIZE, 64, relu),
-        Dense(64, ACTION_SPACE)
+        Dense(STATE_SIZE,32, relu),
+        Dense(32, ACTION_SPACE)
     )
 
     discount_factor = 0.9
     learning_rate = 0.5
     epsilon = 0.1
+    replay_memory_capacity = 1000
+    batch_size = 32
+
+    replay_memory = ReplayMemory([], [], [], [], [])
 
     optimizer = ADAM(learning_rate)
     loss_function(y, ŷ) = Flux.mse(y, ŷ)
@@ -89,7 +82,7 @@ function amosa_DQN_no_replay()
     while temp > Tmin
         for i = 1:iter
 
-            state = change_to_state(x)
+            state = Float32.(change_to_state(x))
 
             q_values = solve_model(state)
 
@@ -121,43 +114,62 @@ function amosa_DQN_no_replay()
             C = unique(C, dims=1)
             npareto = size(C, 1)
 
-            next_state = change_to_state(deepcopy(x))
+            hv = hypervol(C, U_Point, AU_Point, 10000)
 
-            println(action, sum(state - next_state))
+            next_state = copy(Float32.(change_to_state(x)))
 
-            reward = npareto
-            q_values_next = solve_model(next_state)
-            target = reward + discount_factor * maximum(q_values_next)
-            
-            gradient = Flux.gradient(Flux.params(solve_model)) do
-                loss_function(q_values[action], target)
+            next_terminal = false
+
+            reward = hv
+
+            push!(replay_memory.states, state)
+            push!(replay_memory.actions, action)
+            push!(replay_memory.rewards, reward)
+            push!(replay_memory.next_states, next_state)
+            push!(replay_memory.terminals, next_terminal)
+
+            if length(replay_memory.states) > replay_memory_capacity
+                popfirst!(replay_memory.states)
+                popfirst!(replay_memory.actions)
+                popfirst!(replay_memory.rewards)
+                popfirst!(replay_memory.next_states)
+                popfirst!(replay_memory.terminals)
             end
-                    
-            Flux.Optimise.update!(optimizer, Flux.params(solve_model), gradient)
+
+            if length(replay_memory.states) >= batch_size
+                batch_indices = rand(1:length(replay_memory.states), batch_size)
+                batch_states = replay_memory.states[batch_indices]
+                batch_actions = replay_memory.actions[batch_indices]
+                batch_rewards = replay_memory.rewards[batch_indices]
+                batch_next_states = replay_memory.next_states[batch_indices]
+                batch_terminals = replay_memory.terminals[batch_indices]
+                
+                q_values_batch = solve_model.(batch_states)
+                q_values_next_batch = solve_model.(batch_next_states)
+                
+                targets = copy(q_values_batch)
+                for i in 1:batch_size
+                    if batch_terminals[i]
+                        targets[i][batch_actions[i]] = batch_rewards[i]
+                    else
+                        targets[i][batch_actions[i]] = batch_rewards[i] +
+                            discount_factor * maximum(q_values_next_batch[i])
+                    end
+                end
+                
+                Flux.train!(loss_function, Flux.params(solve_model), [(q_values_batch[i][batch_actions[i]], targets[i][batch_actions[i]]) for i in 1:batch_size], optimizer)
+            end
             
         end
 
-        # println(" Temp = ", temp, " Pareto Size = ", npareto)
+        println(" Temp = ", temp, " Pareto Size = ", npareto)
         temp = alpha * temp
     end
-
-    C = zeros(Float64, length(archive), 2)
-    for aa in 1:length(archive)
-        C[aa, 1] = archive[aa].Cost[1]
-        C[aa, 2] = archive[aa].Cost[2]
-    end
-
-    C = unique(C, dims=1)
-    npareto = size(C, 1)
 
     scatter(C[:, 1], C[:, 2], markershape=:circle, legend=false)
     xlabel!("F1")
     ylabel!("F2")
-    savefig("plot-amosa-dqn-noreplay.png")
-
-    U_Point = [0, 0]
-
-    AU_Point = [1000000000, 1000000000]
+    savefig("plot-amosa-dqn-replay.png")
 
     dm = sqrt(maximum(C[:, 1]) - minimum(C[:, 1]) + maximum(C[:, 2]) - minimum(C[:, 2]))
     mid_temp = 0.0
@@ -196,4 +208,4 @@ function amosa_DQN_no_replay()
 
 end
 
-amosa_DQN_no_replay()
+amosa_DQN_replay()
