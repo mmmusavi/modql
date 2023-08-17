@@ -42,9 +42,9 @@ function initial(model)
 
     c_all = model.c
 
-    hub = zeros(Int,1,n)
+    hub = zeros(Int,n)
     
-    hubs = zeros(Int,1,p)
+    hubs = zeros(Int,p)
 
     i = 1
 

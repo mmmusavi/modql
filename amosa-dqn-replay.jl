@@ -82,7 +82,7 @@ function amosa_DQN_replay()
     while temp > Tmin
         for i = 1:iter
 
-            state = Float32.(change_to_state(x))
+            state = change_to_state(x)
 
             q_values = solve_model(state)
 
@@ -116,7 +116,7 @@ function amosa_DQN_replay()
 
             hv = hypervol(C, U_Point, AU_Point, 10000)
 
-            next_state = copy(Float32.(change_to_state(x)))
+            next_state = copy(change_to_state(x))
 
             next_terminal = false
 

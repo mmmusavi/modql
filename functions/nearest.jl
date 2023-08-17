@@ -3,7 +3,7 @@ function nearest(q, model)
     p = model.p
     t = model.t
     d = model.d
-    routes = Vector{Any}(undef, p)
+    routes = Vector{Vector{Int64}}(undef, p)
     hub = q
     hubs = unique(hub)
     vehicle_capacity = model.vehicle_capacity
@@ -15,11 +15,11 @@ function nearest(q, model)
 
         this_nodes = findall(x -> x == hubs[i], hub)
 
-        this_nodes = [idx[2] for idx in this_nodes]
+        # this_nodes = [idx[2] for idx in this_nodes]
         
         deleteat!(this_nodes, findfirst(x -> x == hubs[i], this_nodes))
 
-        this_route = []
+        this_route::Vector{Int64} = Int64[]
 
         pos_prev = 0
 

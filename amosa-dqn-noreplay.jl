@@ -126,7 +126,7 @@ function amosa_DQN_no_replay()
             
         end
 
-        # println(" Temp = ", temp, " Pareto Size = ", npareto)
+        println(" Temp = ", temp)
         temp = alpha * temp
     end
 

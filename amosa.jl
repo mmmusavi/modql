@@ -68,7 +68,7 @@ function amosa()
         
         end
 
-        # println(" Temp = ", temp, " Pareto Size = ", npareto)
+        println(" Temp = ", temp)
         temp = alpha * temp
     end
 

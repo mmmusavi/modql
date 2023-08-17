@@ -1,11 +1,11 @@
 struct Sol
-    hub::Matrix{Int64}
-    route::Vector{Any}
+    hub::Vector{Int64}
+    route::Vector{Vector{Int64}}
 end
 
 struct Archive
     sol::Sol
-    Cost::Array{Float64,1}
+    Cost::Vector{Float64}
 end
 
 struct ReplayMemory
