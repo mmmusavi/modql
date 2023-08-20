@@ -1,5 +1,5 @@
 using Flux
-using Random:length
+using Random: length
 using Plots
 using LinearAlgebra
 using Serialization
@@ -40,7 +40,7 @@ function amosa_DQN_no_replay()
     )
 
     discount_factor = 0.9
-    learning_rate = 0.5
+    learning_rate = 0.1
     epsilon = 0.1
 
     optimizer = ADAM(learning_rate)
@@ -82,7 +82,7 @@ function amosa_DQN_no_replay()
 
             q_values = solve_model(state)
 
-            ns = [1,2,3,4,5,7]
+            ns = [1, 2, 3, 4, 5, 7]
 
             if rand() < epsilon
                 action = rand(1:length(ns))
@@ -117,13 +117,13 @@ function amosa_DQN_no_replay()
             reward = hv
             q_values_next = solve_model(next_state)
             target = reward + discount_factor * maximum(q_values_next)
-            
+
             gradient = Flux.gradient(Flux.params(solve_model)) do
                 loss_function(q_values[action], target)
             end
-                    
+
             Flux.Optimise.update!(optimizer, Flux.params(solve_model), gradient)
-            
+
         end
 
         println(" Temp = ", temp)
@@ -146,8 +146,8 @@ function amosa_DQN_no_replay()
 
     dd = zeros(npareto - 1)
     if npareto > 1
-        for ig in 1:(npareto - 1)
-            dd[ig] = sqrt((C[ig, 1] - C[ig + 1, 1])^2 + (C[ig, 2] - C[ig + 1, 2])^2)
+        for ig in 1:(npareto-1)
+            dd[ig] = sqrt((C[ig, 1] - C[ig+1, 1])^2 + (C[ig, 2] - C[ig+1, 2])^2)
         end
 
         d_bar = sum(dd) / (npareto - 1)

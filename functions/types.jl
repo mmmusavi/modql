@@ -9,9 +9,8 @@ struct Archive
 end
 
 struct ReplayMemory
-    states::Vector{Vector{Float64}}
+    states::Vector{Vector{Int64}}
     actions::Vector{Int}
     rewards::Vector{Float64}
-    next_states::Vector{Vector{Float64}}
-    terminals::Vector{Bool}
+    next_states::Vector{Vector{Int64}}
 end

@@ -1,5 +1,5 @@
 using Flux
-using Random:length
+using Random: length
 using Plots
 using LinearAlgebra
 using Serialization
@@ -35,17 +35,17 @@ function amosa_DQN_replay()
     AU_Point = [1000000000, 1000000000]
 
     solve_model = Chain(
-        Dense(STATE_SIZE,32, relu),
-        Dense(32, ACTION_SPACE)
+        Dense(STATE_SIZE, 64, relu),
+        Dense(64, ACTION_SPACE)
     )
 
     discount_factor = 0.9
-    learning_rate = 0.5
+    learning_rate = 0.1
     epsilon = 0.1
     replay_memory_capacity = 1000
     batch_size = 32
 
-    replay_memory = ReplayMemory([], [], [], [], [])
+    replay_memory = ReplayMemory([], [], [], [])
 
     optimizer = ADAM(learning_rate)
     loss_function(y, ŷ) = Flux.mse(y, ŷ)
@@ -86,7 +86,7 @@ function amosa_DQN_replay()
 
             q_values = solve_model(state)
 
-            ns = [1,2,3,4,5,7]
+            ns = [1, 2, 3, 4, 5, 7]
 
             if rand() < epsilon
                 action = rand(1:length(ns))
@@ -118,48 +118,58 @@ function amosa_DQN_replay()
 
             next_state = copy(change_to_state(x))
 
-            next_terminal = false
-
             reward = hv
 
             push!(replay_memory.states, state)
             push!(replay_memory.actions, action)
             push!(replay_memory.rewards, reward)
             push!(replay_memory.next_states, next_state)
-            push!(replay_memory.terminals, next_terminal)
 
             if length(replay_memory.states) > replay_memory_capacity
                 popfirst!(replay_memory.states)
                 popfirst!(replay_memory.actions)
                 popfirst!(replay_memory.rewards)
                 popfirst!(replay_memory.next_states)
-                popfirst!(replay_memory.terminals)
             end
 
             if length(replay_memory.states) >= batch_size
+
                 batch_indices = rand(1:length(replay_memory.states), batch_size)
                 batch_states = replay_memory.states[batch_indices]
                 batch_actions = replay_memory.actions[batch_indices]
                 batch_rewards = replay_memory.rewards[batch_indices]
                 batch_next_states = replay_memory.next_states[batch_indices]
-                batch_terminals = replay_memory.terminals[batch_indices]
-                
-                q_values_batch = solve_model.(batch_states)
-                q_values_next_batch = solve_model.(batch_next_states)
-                
-                targets = copy(q_values_batch)
-                for i in 1:batch_size
-                    if batch_terminals[i]
-                        targets[i][batch_actions[i]] = batch_rewards[i]
-                    else
-                        targets[i][batch_actions[i]] = batch_rewards[i] +
-                            discount_factor * maximum(q_values_next_batch[i])
+
+                for j in 1:batch_size
+                    q_values = solve_model(batch_states[j])
+                    q_value_next = solve_model(batch_next_states[j])
+                    target = batch_rewards[j] + discount_factor * maximum(q_value_next)
+                    q_values[batch_actions[j]] = target
+
+                    gradient = Flux.gradient(Flux.params(solve_model)) do
+                        loss_function(q_values[action], target)
                     end
+
+                    Flux.Optimise.update!(optimizer, Flux.params(solve_model), gradient)
                 end
-                
-                Flux.train!(loss_function, Flux.params(solve_model), [(q_values_batch[i][batch_actions[i]], targets[i][batch_actions[i]]) for i in 1:batch_size], optimizer)
+
+                # batch_indices = rand(1:length(replay_memory.states), batch_size)
+                # batch_states = replay_memory.states[batch_indices]
+                # batch_actions = replay_memory.actions[batch_indices]
+                # batch_rewards = replay_memory.rewards[batch_indices]
+                # batch_next_states = replay_memory.next_states[batch_indices]
+
+                # q_values_batch = solve_model.(batch_states)
+                # q_values_next_batch = solve_model.(batch_next_states)
+
+                # targets = copy(q_values_batch)
+                # for j in 1:batch_size
+                #     targets[j][batch_actions[j]] = batch_rewards[j] + discount_factor * maximum(q_values_next_batch[j])
+                # end
+
+                # Flux.train!(loss_function, Flux.params(solve_model), [(q_values_batch[k][batch_actions[k]], targets[k][batch_actions[k]]) for k in 1:batch_size], optimizer)
             end
-            
+
         end
 
         println(" Temp = ", temp, " Pareto Size = ", npareto)
@@ -182,8 +192,8 @@ function amosa_DQN_replay()
 
     dd = zeros(npareto - 1)
     if npareto > 1
-        for ig in 1:(npareto - 1)
-            dd[ig] = sqrt((C[ig, 1] - C[ig + 1, 1])^2 + (C[ig, 2] - C[ig + 1, 2])^2)
+        for ig in 1:(npareto-1)
+            dd[ig] = sqrt((C[ig, 1] - C[ig+1, 1])^2 + (C[ig, 2] - C[ig+1, 2])^2)
         end
 
         d_bar = sum(dd) / (npareto - 1)
