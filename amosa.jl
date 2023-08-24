@@ -1,4 +1,4 @@
-using Random:length
+using Random
 using Plots
 using LinearAlgebra
 using Serialization
@@ -10,20 +10,21 @@ include("./functions/types.jl")
 include("./functions/perturb.jl")
 include("./functions/main_produce.jl")
 include("./functions/hypervol.jl")
+include("./functions/model_ref.jl")
 
-function amosa()
+function amosa(model_name)
 
-    file_path = "./models/model-10-2-2.jls"
+    file_path = "./models/$model_name.jls"
 
     model = open(file_path, "r") do io
         deserialize(io)
     end
 
-    alpha = 0.95
+    alpha = 0.98
 
     HL = 20
 
-    SL = 100
+    SL = 80
 
     iter = 100
 
@@ -48,10 +49,12 @@ function amosa()
     i = rand(1:HL)
     x = deepcopy(archive[i])
 
+    loop_start_time = time()
+
     while temp > Tmin
         for i = 1:iter
 
-            ns = [1,2,3,4,5,7]
+            ns = [1, 2, 3, 4, 5, 7]
 
             action = rand(1:length(ns))
 
@@ -65,12 +68,14 @@ function amosa()
 
             archive = deepcopy(archive_out)
             x = deepcopy(x_out)
-        
+
         end
 
-        println(" Temp = ", temp)
+        # println(" Temp = ", temp)
         temp = alpha * temp
     end
+
+    loop_elapsed_time = time() - loop_start_time
 
     C = zeros(Float64, length(archive), 2)
     for aa in 1:length(archive)
@@ -84,13 +89,29 @@ function amosa()
     scatter(C[:, 1], C[:, 2], markershape=:circle, legend=false)
     xlabel!("F1")
     ylabel!("F2")
-    savefig("plot-amosa.png")
+    savefig("./plots/amosa-$model_name.png")
 
     U_Point = [0, 0]
 
-    AU_Point = [1000000000, 1000000000]
+    AU_Point = [sum(model.w) * sum(model.c) / (model.n * model.vehicle_num * model.p), 3 * model.eps_full * sum(model.w) / model.vehicle_capacity]
 
     dm = sqrt(maximum(C[:, 1]) - minimum(C[:, 1]) + maximum(C[:, 2]) - minimum(C[:, 2]))
+
+    dm_sum = 0.0
+
+    for i in 1:npareto
+        min_distance = Inf
+        for j in 1:npareto
+            if i != j
+                distance = sqrt((C[i, 1] - C[j, 1])^2 + (C[i, 2] - C[j, 2])^2)
+                min_distance = min(min_distance, distance)
+            end
+        end
+        dm_sum += min_distance
+    end
+
+    dm_avg = dm_sum / npareto
+
     mid_temp = 0.0
 
     for ig in 1:npareto
@@ -101,14 +122,15 @@ function amosa()
 
     dd = zeros(npareto - 1)
     if npareto > 1
-        for ig in 1:(npareto - 1)
-            dd[ig] = sqrt((C[ig, 1] - C[ig + 1, 1])^2 + (C[ig, 2] - C[ig + 1, 2])^2)
+        for ig in 1:(npareto-1)
+            dd[ig] = sqrt((C[ig, 1] - C[ig+1, 1])^2 + (C[ig, 2] - C[ig+1, 2])^2)
         end
 
         d_bar = sum(dd) / (npareto - 1)
 
         sm_temp = 0.0
-        for ig in 1:length(dd)
+        dd_len = length(dd)
+        for ig in 1:dd_len
             sm_temp += abs(d_bar - dd[ig])
         end
         sm = sm_temp / ((npareto - 1) * d_bar)
@@ -118,13 +140,41 @@ function amosa()
 
     hv = hypervol(C, U_Point, AU_Point, 10000)
 
+    # println("Number of Pareto:", npareto)
+    # println("DM:", dm_avg)
+    # println("MID:", mid)
+    # println("SM:", sm)
+    # println("HyperVol:", hv)
+    # println("Time:", loop_elapsed_time)
 
-    println("Number of Pareto:", npareto)
-    println("DM:", dm)
-    println("MID:", mid)
-    println("SM:", sm)
-    println("HyperVol:", hv)
+    return Dict(
+        "ModelName" => model_name,
+        "NumberPareto" => npareto,
+        "DM" => dm_avg,
+        "MID" => mid,
+        "SM" => sm,
+        "HyperVol" => hv,
+        "LoopTime" => loop_elapsed_time,
+        "C" => C
+    )
 
 end
 
-amosa()
+all_models = model_ref()
+all_results = []
+
+for (model_name, _, _, _) in all_models
+    println("Running AMOSA for model: ", model_name)
+
+    this_result = amosa(model_name)
+    push!(all_results, this_result)
+
+    println("AMOSA on model ", model_name, " is done. \n")
+end
+
+output_file = "./results/amosa.jls"
+open(output_file, "w") do io
+    serialize(io, all_results)
+end
+
+println("Results saved to ", output_file)

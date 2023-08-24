@@ -1,5 +1,5 @@
-using Random
-Random.seed!(1234)
+include("./cab.jl")
+include("./ap.jl")
 
 struct Model
     n::Int64
@@ -9,45 +9,42 @@ struct Model
     vehicle_capacity::Float64
     eps_full::Float64
     eps_empty::Float64
-    x::Matrix{Int64}
-    y::Matrix{Int64}
     c::Matrix{Float64}
-    w::Matrix{Int64}
+    w::Matrix{Float64}
     t::Matrix{Float64}
-    d::Matrix{Int64}
+    d::Matrix{Float64}
 end
 
-function metamodel(n, p,alpha,vehicle_num,vehicle_capacity,eps_full,eps_empty)
+function metamodel(n, p, alpha, vehicle_num, eps_full, eps_empty)
 
-    n::Int = n
-    p::Int = p
+    n::Int64 = n
+    p::Int64 = p
     alpha::Float64 = alpha
     vehicle_num::Int64 = vehicle_num
-    vehicle_capacity::Float64 = vehicle_capacity
 
     eps_full::Float64 = eps_full
     eps_empty::Float64 = eps_empty
 
-    x = rand(0:10000, 1, n)
-    y = rand(0:10000, 1, n)
-
-    c = zeros(n, n)
-    for i in 1:n
-        for j in 1:n
-            c[i,j] = sqrt((x[i] - x[j])^2 + (y[i] - y[j])^2)
-        end
+    if n <= 25
+        rr = Hub_CAB()
+    else
+        rr = Hub_AP()
     end
 
-    w = rand(10:20, n, n)
+    c = rr["c"][1:n, 1:n]
+    w = rr["w"][1:n, 1:n]
+
     t = copy(c)
 
     d = zeros(1, n)
 
     for i = 1:n
-        d[i] = sum(w[:,i])
+        d[i] = sum(w[:, i])
     end
 
-    model = Model(n, p, alpha, vehicle_num, vehicle_capacity, eps_full, eps_empty, x, y, c, w, t, d)
+    vehicle_capacity::Float64 = 1.5 * sum(d) / (p * vehicle_num)
+
+    model = Model(n, p, alpha, vehicle_num, vehicle_capacity, eps_full, eps_empty, c, w, t, d)
 
     return model
 

@@ -1,19 +1,19 @@
 using Serialization
 
 include("./functions/metamodel.jl")
+include("./functions/model_ref.jl")
 
-nodes = 10
-
-hubs = 2
-
-vehicles = 2
-
-model = metamodel(nodes, hubs, 0.5, vehicles, 500, 10, 5)
+table_data = model_ref()
 
 folder_path = "./models"
+for row in table_data
+    instance, nodes, hubs, vehicles = row
 
-file_path = joinpath(folder_path, "model-10-2-2.jls")
+    model = metamodel(nodes, hubs, 0.5, vehicles, 10, 5)
 
-open(file_path, "w") do io
-    serialize(io, model)
+    file_path = joinpath(folder_path, "$instance.jls")
+
+    open(file_path, "w") do io
+        serialize(io, model)
+    end
 end

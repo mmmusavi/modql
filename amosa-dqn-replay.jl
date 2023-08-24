@@ -13,36 +13,34 @@ include("./functions/main_produce.jl")
 include("./functions/hypervol.jl")
 include("./functions/change_to_state.jl")
 
-function amosa_DQN_replay()
+function amosa_DQN_replay(model_name)
 
-    nodes = 10
-
-    hubs = 2
-
-    vehicles = 2
-
-    file_path = "./models/model-10-2-2.jls"
+    file_path = "./models/$model_name.jls"
 
     model = open(file_path, "r") do io
         deserialize(io)
     end
+
+    nodes = model.n
+    hubs = model.p
+    vehicles = model.vehicle_num
 
     STATE_SIZE = nodes + 1 + (nodes - hubs) + hubs * (vehicles - 1) + hubs - 1
     ACTION_SPACE = 6
 
     U_Point = [0, 0]
 
-    AU_Point = [1000000000, 1000000000]
+    AU_Point = [sum(model.w) * sum(model.c) / (model.n * model.vehicle_num * model.p), 3 * model.eps_full * sum(model.w) / model.vehicle_capacity]
 
     solve_model = Chain(
         Dense(STATE_SIZE, 64, relu),
         Dense(64, ACTION_SPACE)
     )
 
-    discount_factor = 0.9
-    learning_rate = 0.1
+    discount_factor = 0.95
+    learning_rate = 0.001
     epsilon = 0.1
-    replay_memory_capacity = 1000
+    replay_memory_capacity = 10000
     batch_size = 32
 
     replay_memory = ReplayMemory([], [], [], [])
@@ -50,11 +48,11 @@ function amosa_DQN_replay()
     optimizer = ADAM(learning_rate)
     loss_function(y, ŷ) = Flux.mse(y, ŷ)
 
-    alpha = 0.95
+    alpha = 0.99
 
     HL = 20
 
-    SL = 100
+    SL = 80
 
     iter = 100
 
@@ -114,7 +112,7 @@ function amosa_DQN_replay()
             C = unique(C, dims=1)
             npareto = size(C, 1)
 
-            hv = hypervol(C, U_Point, AU_Point, 10000)
+            hv = hypervol(C, U_Point, AU_Point, 100000)
 
             next_state = copy(change_to_state(x))
 
@@ -179,9 +177,25 @@ function amosa_DQN_replay()
     scatter(C[:, 1], C[:, 2], markershape=:circle, legend=false)
     xlabel!("F1")
     ylabel!("F2")
-    savefig("plot-amosa-dqn-replay.png")
+    savefig("./plots/amosa-replay-$model_name.png")
 
     dm = sqrt(maximum(C[:, 1]) - minimum(C[:, 1]) + maximum(C[:, 2]) - minimum(C[:, 2]))
+
+    dm_sum = 0.0
+
+    for i in 1:npareto
+        min_distance = Inf
+        for j in 1:npareto
+            if i != j
+                distance = sqrt((C[i, 1] - C[j, 1])^2 + (C[i, 2] - C[j, 2])^2)
+                min_distance = min(min_distance, distance)
+            end
+        end
+        dm_sum += min_distance
+    end
+
+    dm_avg = dm_sum / npareto
+
     mid_temp = 0.0
 
     for ig in 1:npareto
@@ -207,15 +221,15 @@ function amosa_DQN_replay()
         sm = 0.0
     end
 
-    hv = hypervol(C, U_Point, AU_Point, 10000)
+    hv = hypervol(C, U_Point, AU_Point, 100000)
 
 
     println("Number of Pareto:", npareto)
-    println("DM:", dm)
+    println("DM:", dm_avg)
     println("MID:", mid)
     println("SM:", sm)
     println("HyperVol:", hv)
 
 end
 
-amosa_DQN_replay()
+amosa_DQN_replay("CAB1")
